@@ -10,5 +10,6 @@ public class StudentProfile {
         this.rollNo = rollNo; this.name = name; this.cgr = cgr;
         this.attendancePct = attendancePct; this.earnedCredits = earnedCredits;
         this.disciplinaryFlag = disciplinaryFlag;
+        
     }
 }
