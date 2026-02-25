@@ -9,11 +9,10 @@ public class Main {
         menu.put("C1", new MenuItem("C1", "Coffee", 30.00));
         menu.put("S1", new MenuItem("S1", "Sandwich", 60.00));
 
-        // Use interfaces for better decoupling
-        IPricingService pricing = new PricingService(menu);
-        ITaxCalculator taxCalc = new TaxCalculator();
-        IDiscountCalculator discountCalc = new DiscountCalculator();
-        IInvoiceFormatter formatter = new InvoiceFormatter();
+        PricingService pricing = new PricingService(menu);
+        TaxCalculator taxCalc = new TaxCalculator();
+        DiscountCalculator discountCalc = new DiscountCalculator();
+        InvoiceFormatter formatter = new InvoiceFormatter();
         InvoiceRepository repo = new FileStore();
 
         CafeteriaSystem sys = new CafeteriaSystem(pricing, taxCalc, discountCalc, formatter, repo);
@@ -27,8 +26,6 @@ public class Main {
                 new OrderLine("C1", 1)
         );
 
-        InvoiceResult result = sys.checkout("student", order);
-        System.out.print(result.content);
-        System.out.println("Saved invoice: " + result.invId + " (lines=" + result.lines + ")");
+        sys.checkout("student", order);
     }
 }

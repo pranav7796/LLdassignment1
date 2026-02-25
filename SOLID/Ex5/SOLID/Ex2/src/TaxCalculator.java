@@ -1,4 +1,4 @@
-public class TaxCalculator implements ITaxCalculator {
+public class TaxCalculator {
     
     public double calculate(double subtotal, String customerType) {
         double taxPct = TaxRules.taxPercent(customerType);

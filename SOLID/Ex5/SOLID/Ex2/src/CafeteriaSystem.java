@@ -2,15 +2,15 @@ import java.util.*;
 
 public class CafeteriaSystem {
     private final Map<String, MenuItem> menu = new LinkedHashMap<>();
-    private final IPricingService pricing;
-    private final ITaxCalculator taxCalc;
-    private final IDiscountCalculator discountCalc;
-    private final IInvoiceFormatter formatter;
+    private final PricingService pricing;
+    private final TaxCalculator taxCalc;
+    private final DiscountCalculator discountCalc;
+    private final InvoiceFormatter formatter;
     private final InvoiceRepository repo;
     private int invoiceSeq = 1000;
 
-    public CafeteriaSystem(IPricingService pricing, ITaxCalculator taxCalc,
-                           IDiscountCalculator discountCalc, IInvoiceFormatter formatter,
+    public CafeteriaSystem(PricingService pricing, TaxCalculator taxCalc,
+                           DiscountCalculator discountCalc, InvoiceFormatter formatter,
                            InvoiceRepository repo) {
         this.pricing = pricing;
         this.taxCalc = taxCalc;
@@ -21,7 +21,7 @@ public class CafeteriaSystem {
 
     public void addToMenu(MenuItem i) { menu.put(i.id, i); }
 
-    public InvoiceResult checkout(String customerType, List<OrderLine> lines) {
+    public void checkout(String customerType, List<OrderLine> lines) {
         String invId = "INV-" + (++invoiceSeq);
 
         double subtotal = pricing.calculateSubtotal(lines);
@@ -35,7 +35,9 @@ public class CafeteriaSystem {
         double total = subtotal + tax - discount;
 
         String printable = formatter.format(invId, pricedLines, subtotal, taxPct, tax, discount, total);
+        System.out.print(printable);
+
         repo.save(invId, printable);
-        return new InvoiceResult(invId, printable, repo.countLines(invId));
+        System.out.println("Saved invoice: " + invId + " (lines=" + repo.countLines(invId) + ")");
     }
 }

@@ -1,6 +1,6 @@
 import java.util.*;
 
-public class InvoiceFormatter implements IInvoiceFormatter {
+public class InvoiceFormatter {
     
     public String format(String invId, List<PricedLine> lines, 
                          double subtotal, double taxPct, double tax,

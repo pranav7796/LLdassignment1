@@ -1,6 +1,6 @@
 import java.util.*;
 
-public class PricingService implements IPricingService {
+public class PricingService {
     private final Map<String, MenuItem> menu;
 
     public PricingService(Map<String, MenuItem> menu) {
