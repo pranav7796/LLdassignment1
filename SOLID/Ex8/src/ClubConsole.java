@@ -2,15 +2,13 @@ public class ClubConsole {
     private final BudgetLedger ledger;
     private final MinutesBook minutes;
     private final EventPlanner events;
-
     public ClubConsole(BudgetLedger ledger, MinutesBook minutes, EventPlanner events) {
         this.ledger = ledger; this.minutes = minutes; this.events = events;
     }
-
     public void run() {
-        ClubAdminTools treasurer = new TreasurerTool(ledger);
-        ClubAdminTools secretary = new SecretaryTool(minutes);
-        ClubAdminTools lead = new EventLeadTool(events);
+        finance treasurer = new TreasurerTool(ledger);
+        minutes secretary = new SecretaryTool(minutes);
+        events lead = new EventLeadTool(events);
 
         treasurer.addIncome(5000, "sponsor");
         secretary.addMinutes("Meeting at 5pm");

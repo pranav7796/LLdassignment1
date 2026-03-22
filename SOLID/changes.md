@@ -1,4 +1,4 @@
-# SOLID Assignment — Detailed Changes Report (Questions 1–5)
+# SOLID Assignment — Detailed Changes Report (Questions 1–5, 7)
 
 ---
 
@@ -499,7 +499,8 @@ public class CafeteriaSystem {
 
 > *"Software entities should be open for extension but closed for modification."*
 
-### What Was the Problem?
+###
+ What Was the Problem?
 
 The `EligibilityEngine.evaluate()` method used a **long if/else-if chain** to check each eligibility rule:
 
@@ -1054,6 +1055,228 @@ public class JsonExporter extends Exporter {
 ---
 ---
 
+## Question 7 — Ex7: Smart Classroom Devices Interface
+
+### SOLID Principle Violated: **Interface Segregation Principle (ISP)**
+
+> *"Clients should not be forced to depend on methods they do not use."*
+
+### What Was the Problem?
+
+The `SmartClassroomDevice` abstraction bundled together unrelated responsibilities for projector control, lighting control, air-conditioning, and attendance scanning.
+
+Every device was forced to implement methods it did not actually support:
+
+1. `Projector` had dummy implementations for brightness, temperature, and attendance.
+2. `LightsPanel` had irrelevant input, temperature, and attendance methods.
+3. `AirConditioner` had irrelevant brightness, input, and attendance methods.
+4. `AttendanceScanner` had unrelated power and multimedia control methods.
+5. `ClassroomController` depended on one broad interface instead of small, focused capabilities.
+
+This made the code misleading, increased coupling, and hid unsupported behavior behind no-op or dummy implementations.
+
+---
+
+### Before — Original Code
+
+**`SmartClassroomDevice.java` (BEFORE):**
+```java
+public interface SmartClassroomDevice {
+    // Fat interface (ISP violation)
+    void powerOn();
+    void powerOff();
+    void setBrightness(int pct);
+    void setTemperatureC(int c);
+    int scanAttendance();
+    void connectInput(String port);
+}
+```
+
+**`Projector.java` (BEFORE) — forced dummy behavior:**
+```java
+public class Projector implements SmartClassroomDevice {
+    private boolean on;
+
+    @Override public void powerOn() { on = true; }
+    @Override public void powerOff() { on = false; System.out.println("Projector OFF"); }
+
+    @Override public void setBrightness(int pct) { /* irrelevant */ }
+    @Override public void setTemperatureC(int c) { /* irrelevant */ }
+    @Override public int scanAttendance() { return 0; } // dummy
+    @Override public void connectInput(String port) { if (on) System.out.println("Projector ON (" + port + ")"); }
+}
+```
+
+**`ClassroomController.java` (BEFORE) — depends on the fat interface:**
+```java
+public class ClassroomController {
+    private final DeviceRegistry reg;
+
+    public ClassroomController(DeviceRegistry reg) { this.reg = reg; }
+
+    public void startClass() {
+        SmartClassroomDevice pj = reg.getFirstOfType("Projector");
+        pj.powerOn();
+        pj.connectInput("HDMI-1");
+
+        SmartClassroomDevice lights = reg.getFirstOfType("LightsPanel");
+        lights.setBrightness(60);
+
+        SmartClassroomDevice ac = reg.getFirstOfType("AirConditioner");
+        ac.setTemperatureC(24);
+
+        SmartClassroomDevice scan = reg.getFirstOfType("AttendanceScanner");
+        System.out.println("Attendance scanned: present=" + scan.scanAttendance());
+    }
+
+    public void endClass() {
+        System.out.println("Shutdown sequence:");
+        reg.getFirstOfType("Projector").powerOff();
+        reg.getFirstOfType("LightsPanel").powerOff();
+        reg.getFirstOfType("AirConditioner").powerOff();
+    }
+}
+```
+
+---
+
+### After — Refactored Code
+
+**New capability interfaces:**
+```java
+// PowerSwitch.java
+public interface PowerSwitch {
+    void powerOn();
+    void powerOff();
+}
+
+// InputSource.java
+public interface InputSource {
+    void connectInput(String port);
+}
+
+// BrightnessControl.java
+public interface BrightnessControl {
+    void setBrightness(int pct);
+}
+
+// TemperatureControl.java
+public interface TemperatureControl {
+    void setTemperatureC(int c);
+}
+
+// AttendanceReader.java
+public interface AttendanceReader {
+    int scanAttendance();
+}
+```
+
+**Device implementations (AFTER):**
+```java
+public class Projector implements PowerSwitch, InputSource { ... }
+public class LightsPanel implements PowerSwitch, BrightnessControl { ... }
+public class AirConditioner implements PowerSwitch, TemperatureControl { ... }
+public class AttendanceScanner implements AttendanceReader { ... }
+```
+
+**`DeviceRegistry.java` (AFTER) — resolves by capability:**
+```java
+import java.util.*;
+
+public class DeviceRegistry {
+    private final List<Object> devices = new ArrayList<>();
+
+    public void add(Object d) { devices.add(d); }
+
+    public <T> T getOnly(Class<T> capability) {
+        T found = null;
+        for (Object d : devices) {
+            if (capability.isInstance(d)) {
+                if (found != null) {
+                    throw new IllegalStateException("Multiple devices for capability: " + capability.getSimpleName());
+                }
+                found = capability.cast(d);
+            }
+        }
+        if (found == null) {
+            throw new IllegalStateException("Missing capability: " + capability.getSimpleName());
+        }
+        return found;
+    }
+
+    public <T> List<T> getAll(Class<T> capability) {
+        List<T> result = new ArrayList<>();
+        for (Object d : devices) {
+            if (capability.isInstance(d)) {
+                result.add(capability.cast(d));
+            }
+        }
+        return result;
+    }
+}
+```
+
+**`ClassroomController.java` (AFTER) — depends only on required capabilities:**
+```java
+public class ClassroomController {
+    private final DeviceRegistry reg;
+
+    public ClassroomController(DeviceRegistry reg) { this.reg = reg; }
+
+    public void startClass() {
+        for (PowerSwitch d : reg.getAll(PowerSwitch.class)) {
+            d.powerOn();
+        }
+
+        reg.getOnly(InputSource.class).connectInput("HDMI-1");
+        reg.getOnly(BrightnessControl.class).setBrightness(60);
+        reg.getOnly(TemperatureControl.class).setTemperatureC(24);
+
+        int present = reg.getOnly(AttendanceReader.class).scanAttendance();
+        System.out.println("Attendance scanned: present=" + present);
+    }
+
+    public void endClass() {
+        System.out.println("Shutdown sequence:");
+        for (PowerSwitch d : reg.getAll(PowerSwitch.class)) {
+            d.powerOff();
+        }
+    }
+}
+```
+
+**Deleted file:**
+```java
+SmartClassroomDevice.java
+```
+
+---
+
+### Structural Changes Summary
+
+| Aspect | Before | After |
+|--------|--------|-------|
+| **Primary abstraction** | One fat `SmartClassroomDevice` interface | Several small capability interfaces |
+| **Projector** | Implemented irrelevant brightness/temperature/attendance methods | Implements only `PowerSwitch`, `InputSource` |
+| **LightsPanel** | Implemented unrelated input/temperature/attendance methods | Implements only `PowerSwitch`, `BrightnessControl` |
+| **AirConditioner** | Implemented unrelated brightness/input/attendance methods | Implements only `PowerSwitch`, `TemperatureControl` |
+| **AttendanceScanner** | Implemented unrelated power/input/brightness methods | Implements only `AttendanceReader` |
+| **Registry lookup** | String-based class lookup | Type-based capability lookup |
+| **Controller dependency** | Broad device interface | Focused capability interfaces |
+| **Obsolete contract** | `SmartClassroomDevice.java` present | `SmartClassroomDevice.java` removed |
+
+### Why the Refactor Is Better
+
+| Quality | Explanation |
+|---------|-------------|
+| **Coupling** | `ClassroomController` now asks only for the capabilities it uses. The controller no longer depends on unrelated device methods, which reduces accidental coupling. |
+| **Extensibility** | A new device can implement only the interfaces it needs. For example, a future smart board could implement `PowerSwitch` and `InputSource` without fake AC or scanner methods. |
+| **Testability** | Small interfaces are easier to mock and validate in isolation. Each device can be tested against a narrow contract, and the registry/controller behavior is explicit. |
+| **Correctness** | Dummy and no-op methods are removed, so unsupported behavior is no longer silently accepted. The design now reflects real device capabilities. |
+
+---
+---
+
 ## Overall Summary Table
 
 | Question | Exercise | SOLID Principle | Core Problem | Key Fix |
@@ -1063,3 +1286,4 @@ public class JsonExporter extends Exporter {
 | **Q3** | Ex3 — Eligibility Engine | **OCP** | Hard-coded if/else-if chain for each rule | Extract rules behind `EligibilityRule` interface + iterate over list |
 | **Q4** | Ex4 — Hostel Fee Calculator | **OCP** | Switch-case for room types + if/else for add-ons | Replace int constants with `RoomType` enum + embed prices in enums |
 | **Q5** | Ex5 — File Exporter | **LSP** | Subclasses tighten preconditions, corrupt data, handle nulls inconsistently | Template Method Pattern: `final export()` enforces contract → subclasses implement `doExport()` |
+| **Q7** | Ex7 — Smart Classroom Devices | **ISP** | Fat interface forces devices to implement unrelated methods | Split the contract into capability interfaces and make registry/controller depend on specific capabilities |

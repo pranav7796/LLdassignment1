@@ -1,4 +1,4 @@
-# SOLID Assignment — Design Analysis & Class Diagrams (Q1–Q5)
+# SOLID Assignment — Design Analysis & Class Diagrams (Q1–Q5, Q7)
 
 ---
 
@@ -395,6 +395,103 @@ Subclasses of `Exporter` broke the parent's implicit contract:
 | Use `if/instanceof` in caller | Defeats polymorphism entirely. Every time you add a new exporter, you must update every caller's instanceof chain. **OCP violated.** |
 | Throw exceptions from subclass for unsupported content | Caller must know which exporter it's using to handle format-specific exceptions. That's the definition of LSP violation — the subtype isn't substitutable. |
 | Put validation in each subclass independently | Duplicated logic, inconsistent behavior. One subclass might forget a check. Centralized in base = **single source of truth**. |
+
+---
+
+## Exercise 7 — Smart Classroom Devices
+
+### Design Issue: **ISP Violation**
+
+The original design used one large `SmartClassroomDevice` interface for all classroom hardware. That meant every concrete device had to carry methods for features it did not support, creating dummy implementations and misleading contracts.
+
+### Proposed (Implemented) Design
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                                                                      │
+│   <<interface>>        <<interface>>        <<interface>>            │
+│   PowerSwitch          InputSource          BrightnessControl        │
+│   ┌──────────────┐     ┌──────────────┐     ┌────────────────┐       │
+│   │ + powerOn()  │     │ + connect    │     │ + setBrightness│       │
+│   │ + powerOff() │     │   Input()    │     └────────────────┘       │
+│   └──────┬───────┘     └──────┬───────┘                              │
+│          △                    △                                      │
+│          │ implements         │ implements                           │
+│   ┌──────┴───────┐      ┌─────┴──────┐                               │
+│   │  Projector   │      │  Projector │                               │
+│   └──────────────┘      └────────────┘                               │
+│          △                                                          │
+│          │ implements                                               │
+│   ┌──────┴────────┐                                                 │
+│   │  LightsPanel  │ implements PowerSwitch, BrightnessControl       │
+│   └───────────────┘                                                 │
+│          △                                                          │
+│          │ implements                                               │
+│   ┌──────┴────────────┐                                             │
+│   │ AirConditioner    │ implements PowerSwitch, TemperatureControl  │
+│   └───────────────────┘                                             │
+│                                                                      │
+│   <<interface>>                     <<interface>>                    │
+│   TemperatureControl                AttendanceReader                │
+│   ┌────────────────┐                ┌────────────────┐              │
+│   │+setTemperatureC│                │+scanAttendance │              │
+│   └──────┬─────────┘                └──────┬─────────┘              │
+│          △                                 △                        │
+│          │ implements                      │ implements             │
+│   ┌──────┴────────────┐              ┌─────┴──────────────┐         │
+│   │  AirConditioner   │              │ AttendanceScanner  │         │
+│   └───────────────────┘              └────────────────────┘         │
+│                                                                      │
+│   ┌────────────────────────────────────────────────────────────┐     │
+│   │            DeviceRegistry (capability registry)            │     │
+│   │────────────────────────────────────────────────────────────│     │
+│   │ - devices: List<Object>                                    │     │
+│   │ + add(device)                                              │     │
+│   │ + getOnly(Class<T>): T                                     │     │
+│   │ + getAll(Class<T>): List<T>                                │     │
+│   └────────────────────────────────────────────────────────────┘     │
+│                          ▲                                           │
+│                          │ used by                                   │
+│   ┌────────────────────────────────────────────────────────────┐     │
+│   │        ClassroomController (depends on capabilities)       │     │
+│   │────────────────────────────────────────────────────────────│     │
+│   │ + startClass()                                             │     │
+│   │   getAll(PowerSwitch)          → powerOn()                 │     │
+│   │   getOnly(InputSource)         → connectInput("HDMI-1")   │     │
+│   │   getOnly(BrightnessControl)   → setBrightness(60)         │     │
+│   │   getOnly(TemperatureControl)  → setTemperatureC(24)       │     │
+│   │   getOnly(AttendanceReader)    → scanAttendance()          │     │
+│   │ + endClass()                                               │     │
+│   │   getAll(PowerSwitch)          → powerOff()                │     │
+│   └────────────────────────────────────────────────────────────┘     │
+└──────────────────────────────────────────────────────────────────────┘
+
+Old `SmartClassroomDevice` fat interface: REMOVED.
+```
+
+### Relationships & Why They Exist
+
+| Relationship | Type | Why It Exists |
+|---|---|---|
+| `Projector` → `PowerSwitch` | **is-a** (implements) | The projector supports power control, so it should expose only that power contract rather than unrelated classroom operations. |
+| `Projector` → `InputSource` | **is-a** (implements) | Input connection is a projector-specific capability and should be modeled separately from power and other devices. |
+| `LightsPanel` → `PowerSwitch` | **is-a** (implements) | Lights participate in startup and shutdown sequencing, so power control is a valid shared capability. |
+| `LightsPanel` → `BrightnessControl` | **is-a** (implements) | Brightness is specific to lighting and should not leak into non-light devices. |
+| `AirConditioner` → `PowerSwitch` | **is-a** (implements) | AC units are part of the shared power-off workflow. |
+| `AirConditioner` → `TemperatureControl` | **is-a** (implements) | Temperature control belongs only to climate devices. |
+| `AttendanceScanner` → `AttendanceReader` | **is-a** (implements) | Attendance scanning is independent from power, brightness, and input control. |
+| `ClassroomController` → `DeviceRegistry` | **has-a** (injected) | The controller coordinates the classroom using registered devices, but it should discover them by capability instead of by concrete class. |
+| `ClassroomController` → capability interfaces | **depends-on** | The controller now depends only on the exact capabilities it uses, which is the core ISP improvement. |
+| `DeviceRegistry` → `List<Object>` | **has-a** | The registry stores heterogeneous devices and serves them through capability-based queries. |
+
+### What Breaks If Structured Differently?
+
+| Alternative Structure | What Breaks |
+|---|---|
+| Keep one `SmartClassroomDevice` interface (original) | Every new device must implement unrelated methods. Unsupported features get hidden behind dummy logic, which makes the API misleading and brittle. |
+| Keep string-based lookup by concrete class name | The controller becomes tied to implementation names like `"Projector"` and `"LightsPanel"`. Renaming classes or introducing multiple devices of the same family becomes fragile. |
+| Make controller depend on concrete classes | Substitutability is reduced and the controller must know device details rather than capabilities. Adding new device types would force controller changes. |
+| Put all startup/shutdown logic inside each device class | Coordination gets scattered. The controller would lose its orchestration role, and cross-device behavior becomes harder to reason about and test. |
 
 ---
 

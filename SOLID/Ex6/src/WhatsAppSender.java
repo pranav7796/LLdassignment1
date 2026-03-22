@@ -5,7 +5,7 @@ public class WhatsAppSender extends NotificationSender {
     public void dosend(Notification n) {
         // LSP violation: tightens precondition
         if (n.phone == null || !n.phone.startsWith("+")) {
-           System.out.print("phone number is wrong");
+           System.out.println("phone number is wrong");
            audit.add("wafailed");
            return;
         }
